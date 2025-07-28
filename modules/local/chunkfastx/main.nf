@@ -29,7 +29,7 @@ process CHUNKFASTX {
 
     """
     mkdir -p chunked
-    python ${script} ${args} ${reads_cmd} -o "chunked/${out_fn}
+    python ${script} ${args} ${reads_cmd} -o "chunked/${out_fn}"
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
