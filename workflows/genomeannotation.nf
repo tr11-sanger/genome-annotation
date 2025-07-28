@@ -68,8 +68,8 @@ workflow GENOMEANNOTATION {
             return tuple(meta + meta_, fasta)
         }
         .branch { meta, _fasta -> 
-            large: meta.base_count >= 50000 
-            small: meta.base_count < 50000
+            large: meta.base_count >= 100000 
+            small: meta.base_count < 100000
         }
 
     PYRODIGAL_SMALL(genome_contig_split.small, 'gff')

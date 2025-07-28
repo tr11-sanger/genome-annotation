@@ -21,7 +21,6 @@ process SEQSTATS {
     def script = file("${moduleDir}/bin/seq_stats.py")
 
     """
-    mkdir -p chunked
     python ${script} ${args} ${in_cmd} -o "stats.json" $args
 
     cat <<-END_VERSIONS > versions.yml
