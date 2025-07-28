@@ -12,6 +12,7 @@ include { CONCATENATE as CONCATENATE_FAA } from  '../modules/local/concatenate/m
 include { CONCATENATE as CONCATENATE_DOMTBL } from  '../modules/local/concatenate/main'
 include { PYRODIGAL } from '../modules/nf-core/pyrodigal/main'
 include { HMMER_HMMSEARCH } from '../modules/nf-core/hmmer/hmmsearch/main'
+include { FETCHDB } from '../subworkflows/local/fetchdb/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,7 +96,7 @@ workflow GENOMEANNOTATION {
 
     HMMER_HMMSEARCH(chunked_cdss_pfam_in)
 
-    CONCATENATE_DOMTBL(HMMER_HMMSEARCH.out.domtbl.groupTuple())
+    CONCATENATE_DOMTBL(HMMER_HMMSEARCH.out.domain_summary.groupTuple())
 
     emit:
     cds_locations = CONCATENATE_FAA.out.concatenated_file
