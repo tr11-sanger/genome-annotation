@@ -107,7 +107,7 @@ workflow GENOMEANNOTATION {
     CONCATENATE_DOMTBL(
         HMMER_HMMSEARCH.out.domain_summary
         .groupTuple()
-        .map{ meta, results -> tuple(meta, "${meta.id}.domtbl", results) }
+        .map{ meta, results -> tuple(meta, "${meta.id}.domtbl.gz", results) }
     )
 
     emit:
