@@ -20,7 +20,7 @@ process CONCATENATE {
     def out_dir = "concatenated"
 
     """
-    mkdir $out_dir
+    mkdir -p $out_dir
     find input_files/*/* -exec cat {} + > ${out_dir}/${out_fn}
     """
 
@@ -29,7 +29,7 @@ process CONCATENATE {
     def out_dir = "concatenated"
 
     """
-    mkdir $out_dir
+    mkdir -p $out_dir
     touch ${out_dir}/${out_fn}
     """
 }

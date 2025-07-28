@@ -67,7 +67,7 @@ if __name__ == '__main__':
     read_count = 0
     stop_flag = False
 
-    basename, extension = re.findall(r"^(.*)\.(f(ast)?[aq](\.gz)?)$", args.output_pattern)[0][:2]
+    basename, extension = re.findall(r"^(.*?)\.([^.]+(\.gz)?)$", args.output_pattern)[0][:2]
     chunk_n = 1
     out_gz = (args.output_gzip) if (args.output_gzip is not None) else (extension[-3:]=='.gz')
     out_file = None

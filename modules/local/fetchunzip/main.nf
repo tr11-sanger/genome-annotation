@@ -19,7 +19,7 @@ process FETCHUNZIP {
     if (fp.name[-7..-1] == '.tar.gz') {
         """
         #!/bin/bash
-        mkdir "${dir_name}"
+        mkdir -p "${dir_name}"
         tar -xvzf "\$(readlink ${fp.name})" -C "${dir_name}"
         exit 0
         """
@@ -28,7 +28,7 @@ process FETCHUNZIP {
         if (fp.name[-3..-1] == '.gz') {
             """
         #!/bin/bash
-        mkdir "${dir_name}"
+        mkdir -p "${dir_name}"
         gunzip -c "\$(readlink ${fp.name})" > "${dir_name}/${fp.name[0..-4]}"
         exit 0
         """
@@ -36,7 +36,7 @@ process FETCHUNZIP {
         else {
             """
         #!/bin/bash
-        mkdir "${dir_name}"
+        mkdir -p "${dir_name}"
         cp "\$(readlink ${fp.name})" "${dir_name}/${fp.name}"
         exit 0
         """
@@ -61,7 +61,7 @@ process FETCHUNZIP {
     else {
         """
         #!/bin/bash
-        mkdir "${dir_name}"
+        mkdir -p "${dir_name}"
         touch "${dir_name}/${fp.name}"
         """
     }

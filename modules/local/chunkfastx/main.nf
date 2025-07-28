@@ -28,7 +28,7 @@ process CHUNKFASTX {
     def script = file("${moduleDir}/bin/chunk_fastx.py")
 
     """
-    mkdir chunked
+    mkdir -p chunked
     python ${script} ${args} ${reads_cmd} -o "chunked/${out_fn}"
 
     cat <<-END_VERSIONS > versions.yml
@@ -42,7 +42,7 @@ process CHUNKFASTX {
     def extension = reads.getName().tokenize('.')[1..-1].join('.')
     def out_fn = "${prefix}.${extension}"
     """
-    mkdir chunked
+    mkdir -p chunked
     touch "chunked/${prefix}.${extension}"
 
     cat <<-END_VERSIONS > versions.yml
