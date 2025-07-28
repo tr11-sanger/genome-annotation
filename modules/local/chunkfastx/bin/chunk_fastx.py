@@ -62,7 +62,7 @@ def convert_size(size_str, size_suffix=None):
 
 if __name__ == '__main__':
     gz = args.input_fp[-3:]=='.gz'
-    in_reads = get_reads(gzip.open(args.input_fp, 'rb') if gz else open(args.input_gz, 'rt'), gz)
+    in_reads = get_reads(gzip.open(args.input_fp, 'rb') if gz else open(args.input_fp, 'rt'), gz)
     base_count = 0
     read_count = 0
     stop_flag = False
