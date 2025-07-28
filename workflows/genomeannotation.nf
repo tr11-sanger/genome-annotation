@@ -69,8 +69,16 @@ workflow GENOMEANNOTATION {
 
     PYRODIGAL(chunked_genome_contigs, 'gff')
 
-    CONCATENATE_CDS(PYRODIGAL.out.annotations.groupTuple().map{ meta, results -> tuple(meta, "${meta.id}.gff.gz", results) })
-    CONCATENATE_FAA(PYRODIGAL.out.faa.groupTuple().map{ meta, results -> tuple(meta, "${meta.id}.faa.gz", results))
+    CONCATENATE_CDS(
+        PYRODIGAL.out.annotations
+        .groupTuple()
+        .map{ meta, results -> tuple(meta, "${meta.id}.gff.gz", results) }
+    )
+    CONCATENATE_FAA(
+        PYRODIGAL.out.faa
+        .groupTuple()
+        .map{ meta, results -> tuple(meta, "${meta.id}.faa.gz", results) }
+    )
     cdss = CONCATENATE_FAA.out.concatenated_file
 
     // Annotate CDSs
@@ -96,7 +104,11 @@ workflow GENOMEANNOTATION {
 
     HMMER_HMMSEARCH(chunked_cdss_pfam_in)
 
-    CONCATENATE_DOMTBL(HMMER_HMMSEARCH.out.domain_summary.groupTuple().map{ meta, results -> tuple(meta, "${meta.id}.domtbl", results))
+    CONCATENATE_DOMTBL(
+        HMMER_HMMSEARCH.out.domain_summary
+        .groupTuple()
+        .map{ meta, results -> tuple(meta, "${meta.id}.domtbl", results) }
+    )
 
     emit:
     cds_locations = CONCATENATE_FAA.out.concatenated_file
