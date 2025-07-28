@@ -3,12 +3,15 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { samplesheetToList } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_genomeannotation_pipeline'
+include { CHUNKFASTX as CHUNKFASTX_CONTIG } from  '../modules/local/chunkfastx/main'
+include { CHUNKFASTX as CHUNKFASTX_CDS } from  '../modules/local/chunkfastx/main'
+include { CONCATENATE as CONCATENATE_CDS } from  '../modules/local/concatenate/main'
+include { CONCATENATE as CONCATENATE_FAA } from  '../modules/local/concatenate/main'
+include { CONCATENATE as CONCATENATE_DOMTBL } from  '../modules/local/concatenate/main'
+include { PYRODIGAL } from '../modules/nf-core/pyrodigal/main'
+include { HMMER_HMMSEARCH } from '../modules/nf-core/hmmer/hmmsearch/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -17,77 +20,87 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_geno
 */
 
 workflow GENOMEANNOTATION {
-
-    take:
-    ch_samplesheet // channel: samplesheet read in from --input
     main:
-
     ch_versions = Channel.empty()
-    ch_multiqc_files = Channel.empty()
-    //
-    // MODULE: Run FastQC
-    //
-    FASTQC (
-        ch_samplesheet
-    )
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
 
-    //
-    // Collate and save software versions
-    //
-    softwareVersionsToYAML(ch_versions)
-        .collectFile(
-            storeDir: "${params.outdir}/pipeline_info",
-            name: 'nf_core_'  +  'genomeannotation_software_'  + 'mqc_'  + 'versions.yml',
-            sort: true,
-            newLine: true
-        ).set { ch_collated_versions }
-
-
-    //
-    // MODULE: MultiQC
-    //
-    ch_multiqc_config        = Channel.fromPath(
-        "$projectDir/assets/multiqc_config.yml", checkIfExists: true)
-    ch_multiqc_custom_config = params.multiqc_config ?
-        Channel.fromPath(params.multiqc_config, checkIfExists: true) :
-        Channel.empty()
-    ch_multiqc_logo          = params.multiqc_logo ?
-        Channel.fromPath(params.multiqc_logo, checkIfExists: true) :
-        Channel.empty()
-
-    summary_params      = paramsSummaryMap(
-        workflow, parameters_schema: "nextflow_schema.json")
-    ch_workflow_summary = Channel.value(paramsSummaryMultiqc(summary_params))
-    ch_multiqc_files = ch_multiqc_files.mix(
-        ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
-    ch_multiqc_custom_methods_description = params.multiqc_methods_description ?
-        file(params.multiqc_methods_description, checkIfExists: true) :
-        file("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
-    ch_methods_description                = Channel.value(
-        methodsDescriptionText(ch_multiqc_custom_methods_description))
-
-    ch_multiqc_files = ch_multiqc_files.mix(ch_collated_versions)
-    ch_multiqc_files = ch_multiqc_files.mix(
-        ch_methods_description.collectFile(
-            name: 'methods_description_mqc.yaml',
-            sort: true
+    // Fetch databases
+    db_ch = Channel
+        .from(
+            params.databases.collect { k, v ->
+                if ((v instanceof Map) && v.containsKey('base_dir')) {
+                    return [id: k] + v
+                }
+            }
         )
-    )
+        .filter { it }
 
-    MULTIQC (
-        ch_multiqc_files.collect(),
-        ch_multiqc_config.toList(),
-        ch_multiqc_custom_config.toList(),
-        ch_multiqc_logo.toList(),
-        [],
-        []
-    )
+    FETCHDB(db_ch, "${projectDir}/${params.databases.cache_path}")
+    dbs_path_ch = FETCHDB.out.dbs
 
-    emit:multiqc_report = MULTIQC.out.report.toList() // channel: /path/to/multiqc_report.html
-    versions       = ch_versions                 // channel: [ path(versions.yml) ]
+    dbs_path_ch
+        .branch { meta, _fp ->
+            pfam: meta.id == 'pfam'
+        }
+        .set { dbs }
 
+
+    // Parse samplesheet and fetch reads
+    samplesheet = Channel.fromList(samplesheetToList(params.samplesheet, "${workflow.projectDir}/assets/schema_input.json"))
+
+    genome_contigs = samplesheet.map {
+        sample, fasta ->
+        [
+            ['id': sample],
+            fasta,
+        ]
+    }
+
+    // Get CDSs from contigs
+    CHUNKFASTX_CONTIG(genome_contigs)
+    chunked_genome_contigs = CHUNKFASTX_CONTIG.out.chunked_reads.flatMap {
+        meta, chunks ->
+        def chunks_ = chunks instanceof Collection ? chunks : [chunks]
+        return chunks_.collect {
+            chunk ->
+            tuple(groupKey(meta, chunks_.size()), chunk)
+        }
+    }
+
+    PYRODIGAL(chunked_genome_contigs, 'gff')
+
+    CONCATENATE_CDS(PYRODIGAL.out.annotations.groupTuple())
+    CONCATENATE_FAA(PYRODIGAL.out.faa.groupTuple())
+    cdss = CONCATENATE_FAA.out.concatenated_file
+
+    // Annotate CDSs
+    CHUNKFASTX_CDS(cdss)
+    chunked_cdss = CHUNKFASTX_CDS.out.chunked_reads.flatMap {
+        meta, chunks ->
+        def chunks_ = chunks instanceof Collection ? chunks : [chunks]
+        return chunks_.collect {
+            chunk ->
+            tuple(groupKey(meta, chunks_.size()), chunk)
+        }
+    }
+
+    pfam_db = dbs.pfam
+        .map { meta, fp ->
+            file("${fp}/${meta.base_dir}/${meta.files.hmm}")
+        }
+        .first()
+
+    chunked_cdss_pfam_in = chunked_cdss
+        .combine(pfam_db)
+        .map { meta, seqs, db -> tuple(meta, db, seqs, false, true, true) }
+
+    HMMER_HMMSEARCH(chunked_cdss_pfam_in)
+
+    CONCATENATE_DOMTBL(HMMER_HMMSEARCH.out.domtbl.groupTuple())
+
+    emit:
+    cds_locations = CONCATENATE_FAA.out.concatenated_file
+    functional_annotations = CONCATENATE_DOMTBL.out.concatenated_file
+    versions = ch_versions                 // channel: [ path(versions.yml) ]
 }
 
 /*

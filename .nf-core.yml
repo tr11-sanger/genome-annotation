@@ -8,7 +8,7 @@ template:
   org: nf-core
   name: genomeannotation
   description: Simple functional annotation of genomes
-  author: '@timrozday-mgnify'
+  author: "@timrozday-mgnify"
   version: 1.0.0dev
   force: true
   outdir: .
