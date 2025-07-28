@@ -5,12 +5,11 @@
 */
 include { samplesheetToList } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { CHUNKFASTX as CHUNKFASTX_CONTIG } from  '../modules/local/chunkfastx/main'
-include { CHUNKFASTX as CHUNKFASTX_CDS } from  '../modules/local/chunkfastx/main'
-include { CONCATENATE as CONCATENATE_CDS } from  '../modules/local/concatenate/main'
-include { CONCATENATE as CONCATENATE_FAA } from  '../modules/local/concatenate/main'
-include { CONCATENATE as CONCATENATE_DOMTBL } from  '../modules/local/concatenate/main'
-include { PYRODIGAL } from '../modules/nf-core/pyrodigal/main'
+include { SEQSTATS } from  '../modules/local/seqstats/main'
+include { CHUNKFASTX } from  '../modules/local/chunkfastx/main'
+include { CONCATENATE } from  '../modules/local/concatenate/main'
+include { PYRODIGAL as PYRODIGAL_SMALL } from '../modules/nf-core/pyrodigal/main'
+include { PYRODIGAL as PYRODIGAL_LARGE } from '../modules/nf-core/pyrodigal/main'
 include { HMMER_HMMSEARCH } from '../modules/nf-core/hmmer/hmmsearch/main'
 include { FETCHDB } from '../subworkflows/local/fetchdb/main'
 
@@ -57,33 +56,30 @@ workflow GENOMEANNOTATION {
     }
 
     // Get CDSs from contigs
-    CHUNKFASTX_CONTIG(genome_contigs)
-    chunked_genome_contigs = CHUNKFASTX_CONTIG.out.chunked_reads.flatMap {
-        meta, chunks ->
-        def chunks_ = chunks instanceof Collection ? chunks : [chunks]
-        return chunks_.collect {
-            chunk ->
-            tuple(groupKey(meta, chunks_.size()), chunk)
+    SEQSTATS(genome_contigs)
+    genome_contig_split = SEQSTATS.out.stats
+        .join(genome_contigs)
+        .map { meta, stats, fasta ->
+            def json = new groovy.json.JsonSlurper().parseText(stats.text)
+            def meta_ = [
+                'base_count': json["base_count"], 
+                'seq_count': json["seq_count"]
+            ]
+            return tuple(meta + meta_, fasta)
         }
-    }
+        .branch { meta, _fasta -> 
+            large: meta.base_count >= 50000 
+            small: meta.base_count < 50000
+        }
 
-    PYRODIGAL(chunked_genome_contigs, 'gff')
+    PYRODIGAL_SMALL(genome_contig_split.small, 'gff')
+    PYRODIGAL_LARGE(genome_contig_split.large, 'gff')
 
-    CONCATENATE_CDS(
-        PYRODIGAL.out.annotations
-        .groupTuple()
-        .map{ meta, results -> tuple(meta, "${meta.id}.gff.gz", results) }
-    )
-    CONCATENATE_FAA(
-        PYRODIGAL.out.faa
-        .groupTuple()
-        .map{ meta, results -> tuple(meta, "${meta.id}.faa.gz", results) }
-    )
-    cdss = CONCATENATE_FAA.out.concatenated_file
-
+    cdss = PYRODIGAL_SMALL.out.faa
+        .mix(PYRODIGAL_LARGE.out.faa)
     // Annotate CDSs
-    CHUNKFASTX_CDS(cdss)
-    chunked_cdss = CHUNKFASTX_CDS.out.chunked_reads.flatMap {
+    CHUNKFASTX(cdss)
+    chunked_cdss = CHUNKFASTX.out.chunked_reads.flatMap {
         meta, chunks ->
         def chunks_ = chunks instanceof Collection ? chunks : [chunks]
         return chunks_.collect {
@@ -104,15 +100,15 @@ workflow GENOMEANNOTATION {
 
     HMMER_HMMSEARCH(chunked_cdss_pfam_in)
 
-    CONCATENATE_DOMTBL(
+    CONCATENATE(
         HMMER_HMMSEARCH.out.domain_summary
         .groupTuple()
         .map{ meta, results -> tuple(meta, "${meta.id}.domtbl.gz", results) }
     )
 
     emit:
-    cds_locations = CONCATENATE_FAA.out.concatenated_file
-    functional_annotations = CONCATENATE_DOMTBL.out.concatenated_file
+    cds_locations = cdss
+    functional_annotations = CONCATENATE.out.concatenated_file
     versions = ch_versions                 // channel: [ path(versions.yml) ]
 }
 
