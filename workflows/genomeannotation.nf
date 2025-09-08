@@ -18,12 +18,21 @@ workflow GENOMEANNOTATION {
     ch_versions = Channel.empty()
 
     // Parse samplesheet and fetch reads
-    samplesheet = Channel.fromList(samplesheetToList(params.samplesheet, "${workflow.projectDir}/assets/schema_input.json"))
+    samplesheet = Channel.fromList(
+        samplesheetToList(
+            params.samplesheet, 
+            "${workflow.projectDir}/assets/schema_input.json"
+        )
+    ).eachWithIndex{ 
+        data, idx -> 
+        def (sample, fasta) = data
+        return [idx, sample, fasta] 
+    }
 
     genome_contigs = samplesheet.map {
-        sample, fasta ->
+        idx, sample, fasta ->
         [
-            ['id': sample],
+            ['id': sample, 'idx': idx],
             fasta,
         ]
     }
