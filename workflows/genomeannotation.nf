@@ -18,24 +18,20 @@ workflow GENOMEANNOTATION {
     ch_versions = Channel.empty()
 
     // Parse samplesheet and fetch reads
-    samplesheet = Channel.fromList(
-        samplesheetToList(
-            params.samplesheet, 
-            "${workflow.projectDir}/assets/schema_input.json"
+    genome_contigs = Channel.fromList(
+            samplesheetToList(
+                params.samplesheet, 
+                "${workflow.projectDir}/assets/schema_input.json"
+            )
+            .withIndex().collect{ elem, idx -> [idx, elem[0], elem[1]] }
         )
-    ).eachWithIndex{ 
-        data, idx -> 
-        def (sample, fasta) = data
-        return [idx, sample, fasta] 
-    }
-
-    genome_contigs = samplesheet.map {
-        idx, sample, fasta ->
-        [
-            ['id': sample, 'idx': idx],
-            fasta,
-        ]
-    }
+        .map {
+            idx, sample, fasta ->
+            [
+                ['id': sample, 'idx': idx],
+                fasta,
+            ]
+        }
 
     // Get CDSs from contigs
     PYRODIGAL(genome_contigs, 'gff')
