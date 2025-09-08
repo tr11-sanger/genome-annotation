@@ -29,7 +29,7 @@ workflow GENOMEANNOTATION {
     }
 
     // Get CDSs from contigs
-    PYRODIGAL(genome_contig, 'gff')
+    PYRODIGAL(genome_contigs, 'gff')
 
     emit:
     cds_locations = PYRODIGAL.out.faa
